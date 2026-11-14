@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: S3-triggered image resizer (source bucket -> Lambda -> thumbnail bucket)
+
+Resources:
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-source-${AWS::AccountId}"
+
+  ThumbBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-thumbs-${AWS::AccountId}"
+
+  ResizeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          DEST_BUCKET: !Sub "${AWS::StackName}-thumbs-${AWS::AccountId}"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-source-${AWS::AccountId}/*"
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-thumbs-${AWS::AccountId}/*"
+      Events:
+        UploadJpg:
+          Type: S3
+          Properties:
+            Bucket: !Ref SourceBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - { Name: suffix, Value: .jpg }
+        UploadJpeg:
+          Type: S3
+          Properties:
+            Bucket: !Ref SourceBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - { Name: suffix, Value: .jpeg }
+        UploadPng:
+          Type: S3
+          Properties:
+            Bucket: !Ref SourceBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - { Name: suffix, Value: .png }
+
+Outputs:
+  SourceBucketName:
+    Value: !Ref SourceBucket
+  ThumbBucketName:
+    Value: !Ref ThumbBucket
